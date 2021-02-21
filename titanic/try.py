@@ -100,7 +100,6 @@ if __name__ == '__main__':
     print('Test y Shape = {}\n'.format(test_data.shape[0]))
     print(test_data.columns)
     print(train_data.columns)
-
     print(train_data.info())
 
     # the correlation between features
