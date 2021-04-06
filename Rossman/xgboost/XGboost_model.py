@@ -78,7 +78,6 @@ if __name__ == '__main__':
     train_data = pd.read_csv(path_dir + "/input/train.csv", parse_dates=[2])
     store_data = pd.read_csv(path_dir + "/input/store.csv")
 
-    # store_data.astype(types)
 
     # clean na data
     print(train_data.isna().sum())
@@ -93,15 +92,6 @@ if __name__ == '__main__':
     store_data.fillna(0, inplace=True)
     print(store_data.dtypes)
 
-    # types = {
-    #     'CompetitionOpenSinceYear': np.dtype(int),
-    #     'CompetitionOpenSinceMonth': np.dtype(int),
-    #     'StateHoliday': np.dtype(str),
-    #     'Promo2SinceWeek': np.dtype(int),
-    #     'SchoolHoliday': np.dtype(float),
-    #     'PromoInterval': np.dtype(str)}
-    # store_data.astype(dtype=types)
-
     # Join store_data
     train_data = pd.merge(train_data, store_data, on='Store')
     test_data = pd.merge(test_data, store_data, on='Store')
@@ -111,8 +101,8 @@ if __name__ == '__main__':
     train_data, features = build_features(features, train_data)
     test_data, _ = build_features([], test_data)
 
-    print('training data processed')
 
+    # train XBGoost model
     params = {"objective": "reg:linear",
               "booster": "gbtree",
               "eta": 0.3,
@@ -124,8 +114,7 @@ if __name__ == '__main__':
               }
     num_boost_round = 300
 
-    print("Train a XGBoost model")
-    # X_train, X_valid = train_test_split(train_data, test_size=0.2, random_state=10)
+    # split dataset : year before 2015 as training set, after as validation set
     X_train = train_data[train_data['Year'] < 2015]
     X_valid = train_data[train_data['Year'] >= 2015]
     # So log1p produces only positive values and removes the 'danger' of large negative numbers.
@@ -137,27 +126,26 @@ if __name__ == '__main__':
 
     watchlist = [(dtrain, 'train'), (dvalid, 'eval')]
     gbm = xgb.train(params, dtrain, num_boost_round, evals=watchlist,\
-                    early_stopping_rounds=500, feval=rmspe_xg, verbose_eval=True)
+                    early_stopping_rounds=100, feval=rmspe_xg, verbose_eval=True)
 
     print("Validating")
     yhat = gbm.predict(xgb.DMatrix(X_valid[features]))
     error = rmspe(X_valid.Sales.values, np.expm1(yhat))
     print('RMSPE: {:.6f}'.format(error))
 
-    print("Make predictions on the test set")
+    # use the trained model to predict
     dtest = xgb.DMatrix(test_data[features])
     test_probs = gbm.predict(dtest)
-    # Make Submission
     result = pd.DataFrame({"Id": test_data["Id"], 'Sales': np.expm1(test_probs)})
 
     result[result < 0] = 0
     result = result.sort_values(by='Id', ascending=True)
 
-
+    # save final submission
     result.to_csv("xgboost_submission.csv", index=False)
 
-    # XGB feature importances
-    # Based on https://www.kaggle.com/mmueller/liberty-mutual-group-property-inspection-prediction/xgb-feature-importance-python/code
+    # XGB feature importances Based on https://www.kaggle.com/mmueller/liberty-mutual-group-property-inspection
+    # -prediction/xgb-feature-importance-python/code
 
     create_feature_map(features)
     importance = gbm.get_fscore(fmap='xgb.fmap')
