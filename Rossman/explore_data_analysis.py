@@ -32,7 +32,7 @@ def time_series_plot(df):
                     ax.set_ylim(bottom=0)
                     ax.get_yaxis().set_major_formatter(
                         matplotlib.ticker.FuncFormatter(lambda x, p: format(int(x), ',')))
-                    plt.show()
+                    plt.savefig('time_series'+p)
 
 
 def numeric_eda(df, hue=None):
@@ -47,14 +47,14 @@ def numeric_eda(df, hue=None):
             figure.add_subplot(1, len(columns), index + 1)
         sns.boxplot(y=col, data=df, boxprops={'facecolor': 'None'})
     figure.tight_layout()
-    plt.show()
+    plt.savefig('numeric_figure')
 
     if len(df.select_dtypes(include='category').columns) > 0:
         for col_num in df.select_dtypes(include=np.number).columns:
             for col in df.select_dtypes(include='category').columns:
                 fig = sns.catplot(x=col, y=col_num, kind='violin', data=df, height=5, aspect=2)
                 fig.set_xticklabels(rotation=90)
-                plt.show()
+                plt.savefig('numeric'+col_num)
 
     # Plot the pairwise joint distributions
     print("\nTo check pairwise joint distribution of numeric data")
@@ -62,7 +62,7 @@ def numeric_eda(df, hue=None):
         sns.pairplot(df.select_dtypes(include=np.number))
     else:
         sns.pairplot(df.select_dtypes(include=np.number).join(df[[hue]]), hue=hue)
-    plt.show()
+    plt.savefig('numeric')
 
 
 def top5(df):
@@ -84,7 +84,7 @@ def categorical_eda(df, hue=None):
     for col in df.select_dtypes(include='category').columns:
         fig = sns.catplot(x=col, kind="count", data=df, hue=hue)
         fig.set_xticklabels(rotation=90)
-        plt.show()
+        plt.savefig('categoric'+col)
 
 
 def eda(df):
@@ -107,7 +107,7 @@ def eda(df):
         print("\nPreview of data with null values:")
         display(df[df.isnull().any(axis=1)].head(3))
         missingno.matrix(df)
-        plt.show()
+        plt.savefig('missing_data')
 
     # generate count statistics of duplicate entries
     if len(df[df.duplicated()]) > 0:
