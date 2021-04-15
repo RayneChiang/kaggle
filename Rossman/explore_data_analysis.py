@@ -5,19 +5,20 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import missingno
 import warnings
-
+from pylab import rcParams
+import statsmodels.api as sm
 from IPython.core.display import display
 
 warnings.filterwarnings("ignore")
-
 
 
 def time_series_plot(df):
     """Given dataframe, generate times series plot of numeric data by daily, monthly and yearly frequency"""
     print("\nTo check time series of numeric data  by daily, monthly and yearly frequency")
     if len(df.select_dtypes(include='datetime64').columns) > 0:
+
         for col in df.select_dtypes(include='datetime64').columns:
-            for p in ['D', 'M', 'Y']:
+            for p in ['M']:
                 if p == 'D':
                     print("Plotting daily data")
                 elif p == 'M':
@@ -27,12 +28,11 @@ def time_series_plot(df):
                 for col_num in df.select_dtypes(include=np.number).columns:
                     __ = df.copy()
                     __ = __.set_index(col)
-                    __T = __.resample(p).sum()
-                    ax = __T[[col_num]].plot()
-                    ax.set_ylim(bottom=0)
-                    ax.get_yaxis().set_major_formatter(
-                        matplotlib.ticker.FuncFormatter(lambda x, p: format(int(x), ',')))
-                    plt.savefig('time_series'+p)
+                    __T = __.resample(p).mean()
+                    rcParams['figure.figsize'] = 11, 9
+                    decomposition = sm.tsa.seasonal_decompose(__T, model='Additive')
+                    decomposition.plot()
+                    plt.show()
 
 
 def numeric_eda(df, hue=None):
@@ -40,7 +40,7 @@ def numeric_eda(df, hue=None):
     print("\nTo check: \nDistribution of numeric data")
     display(df.describe().T)
     columns = df.select_dtypes(include=np.number).columns
-    figure = plt.figure(figsize=(20, 10))
+    figure = plt.figure(figsize=(14, 8))
     figure.add_subplot(1, len(columns), 1)
     for index, col in enumerate(columns):
         if index > 0:
@@ -54,7 +54,7 @@ def numeric_eda(df, hue=None):
             for col in df.select_dtypes(include='category').columns:
                 fig = sns.catplot(x=col, y=col_num, kind='violin', data=df, height=5, aspect=2)
                 fig.set_xticklabels(rotation=90)
-                plt.savefig('numeric'+col_num)
+                plt.savefig('numeric' + col_num)
 
     # Plot the pairwise joint distributions
     print("\nTo check pairwise joint distribution of numeric data")
@@ -77,14 +77,14 @@ def top5(df):
 
 def categorical_eda(df, hue=None):
     """Given dataframe, generate EDA of categorical data"""
-    print("\nTo check: \nUnique count of non-numeric data\n")
-    print(df.select_dtypes(include=['object', 'category']).nunique())
-    top5(df)
+    # print("\nTo check: \nUnique count of non-numeric data\n")
+    # print(df.select_dtypes(include=['object', 'category']).nunique())
+    # top5(df)
     # Plot count distribution of categorical data
     for col in df.select_dtypes(include='category').columns:
         fig = sns.catplot(x=col, kind="count", data=df, hue=hue)
         fig.set_xticklabels(rotation=90)
-        plt.savefig('categoric'+col)
+        plt.savefig('categoric' + col)
 
 
 def eda(df):
@@ -116,11 +116,12 @@ def eda(df):
     else:
         print("\nNo duplicated entries found")
 
-    # EDA of categorical data
-    categorical_eda(df)
+    # # EDA of categorical data
+    # categorical_eda(df)
 
-    # EDA of numeric data
-    numeric_eda(df)
+    # # EDA of numeric data
+    # numeric_eda(df)
 
-    # Plot time series plot of numeric data
+    # top5(df)
+    # # # Plot time series plot of numeric data
     time_series_plot(df)
