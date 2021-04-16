@@ -44,39 +44,66 @@ if __name__ == '__main__':
 
     store_1 = train_data.loc[(train_data["Store"] == 1) & (train_data['Sales'] > 0), ['Date', "Sales"]]
     store_2 = train_data.loc[(train_data["Store"] == 2) & (train_data['Sales'] > 0), ['Date', "Sales"]]
-    f = plt.figure(figsize=(18, 10))
-    ax1 = f.add_subplot(211)
-    ax1.plot(store_1['Date'], store_1['Sales'], '-')
-    ax1.set_xlabel('Time')
-    ax1.set_ylabel('Sales')
-    ax1.xaxis.set_major_locator(ticker.AutoLocator())
-    ax1.xaxis.set_minor_locator(ticker.AutoMinorLocator())
-    # ax1.text(0.0, 0.1, "AutoLocator()", fontsize=14, transform=ax1.transAxes)
-
-    ax1.set_title('Store 1 Sales Distribution')
-
-    ax2 = f.add_subplot(212)
-    ax2.plot(store_2['Date'], store_2['Sales'], '-')
-    ax2.set_xlabel('Time')
-    ax2.set_ylabel('Sales')
-    ax2.xaxis.set_major_locator(ticker.AutoLocator())
-    ax2.xaxis.set_minor_locator(ticker.AutoMinorLocator())
-    ax2.set_title('Store 2 Sales Distribution')
-    plt.savefig('Store Sales Distribution')
+    # f = plt.figure(figsize=(18, 10))
+    # ax1 = f.add_subplot(211)
+    # ax1.plot(store_1['Date'], store_1['Sales'], '-')
+    # ax1.set_xlabel('Time')
+    # ax1.set_ylabel('Sales')
+    # ax1.xaxis.set_major_locator(ticker.AutoLocator())
+    # ax1.xaxis.set_minor_locator(ticker.AutoMinorLocator())
+    # # ax1.text(0.0, 0.1, "AutoLocator()", fontsize=14, transform=ax1.transAxes)
+    #
+    # ax1.set_title('Store 1 Sales Distribution')
+    #
+    # ax2 = f.add_subplot(212)
+    # ax2.plot(store_2['Date'], store_2['Sales'], '-')
+    # ax2.set_xlabel('Time')
+    # ax2.set_ylabel('Sales')
+    # ax2.xaxis.set_major_locator(ticker.AutoLocator())
+    # ax2.xaxis.set_minor_locator(ticker.AutoMinorLocator())
+    # ax2.set_title('Store 2 Sales Distribution')
+    # plt.savefig('Store Sales Distribution')
 
     import seaborn as sns
     import matplotlib.pyplot as plt
-
+    sns.set()
     # check distribution of sales in train set
+    # fig = plt.figure(figsize=(12, 5))
+    # ax1 = fig.add_subplot(121)
+    # ax2 = fig.add_subplot(122)
+    # sales_view = train_data[train_data['Sales'] > 0]['Sales']
+    # g1 = sns.histplot(sales_view, label='skewness:{:.2f}'.format(train_data['Sales'].skew()), ax=ax1)
+    # g1.legend()
+    # g1.set(xlabel='Sales', ylabel='Density', title='Sales Distribution')
+    # g2 = sns.histplot(np.log1p(sales_view), label='skewness:{:.2f}'.format(np.log1p(train_data['Sales']).skew()), ax=ax2)
+    # g2.legend()
+    # g2.set(xlabel='log(Sales+1)', ylabel='Density', title='log(Sales+1) Distribution')
+    # plt.savefig('sales Distribution')
+    # print('sales saved')
+    #
+    # fig = plt.figure(figsize=(12, 5))
+    # ax1 = fig.add_subplot(121)
+    # ax2 = fig.add_subplot(122)
+    # sales_view = train_data[train_data['Customers'] > 0]['Customers']
+    # g1 = sns.histplot(sales_view, label='skewness:{:.2f}'.format(train_data['Customers'].skew()), ax=ax1)
+    # g1.legend()
+    # g1.set(xlabel='Customer', ylabel='Density', title='Customer Distribution')
+    # g2 = sns.histplot(np.log1p(sales_view), label='skewness:{:.2f}'.format(np.log1p(train_data['Sales']).skew()), ax=ax2)
+    # g2.legend()
+    # g2.set(xlabel='log(Customers+1)', ylabel='Density', title='log(Customers+1) Distribution')
+    # plt.savefig('customers Distribution')
+    # print('customers saved')
+
+
     fig = plt.figure(figsize=(12, 5))
     ax1 = fig.add_subplot(121)
     ax2 = fig.add_subplot(122)
-    sales_view = train_data[train_data['Sales'] > 0]['Sales']
-    g1 = sns.histplot(sales_view, label='skewness:{:.2f}'.format(train_data['Sales'].skew()), ax=ax1)
+    sales_view = store_data[store_data['Customers'] > 0]['Customers']
+    g1 = sns.histplot(sales_view, label='skewness:{:.2f}'.format(train_data['Customers'].skew()), ax=ax1)
     g1.legend()
-    g1.set(xlabel='Sales', ylabel='Density', title='Sales Distribution')
+    g1.set(xlabel='Customer', ylabel='Density', title='Customer Distribution')
     g2 = sns.histplot(np.log1p(sales_view), label='skewness:{:.2f}'.format(np.log1p(train_data['Sales']).skew()), ax=ax2)
     g2.legend()
-    g2.set(xlabel='log(Sales+1)', ylabel='Density', title='log(Sales+1) Distribution')
-    plt.savefig('train data Distribution')
-
+    g2.set(xlabel='log(Customers+1)', ylabel='Density', title='log(Customers+1) Distribution')
+    plt.savefig('customers Distribution')
+    print('customers saved')
