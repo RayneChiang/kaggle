@@ -10,10 +10,10 @@ if __name__ == '__main__':
     E1_frame = target[['E1_a', 'E1_b', 'E1_c', 'E1_d', 'E1_e', 'E1_f', 'E1_g', 'E1_h']]
 
     cols = ['E1_a', 'E1_b', 'E1_c', 'E1_d', 'E1_e', 'E1_f', 'E1_g', 'E1_h']
-    for index, col in enumerate(cols):
+    for col in cols:
         index_list = E1_frame[col][E1_frame[col] == 1].index
-        for index in index_list:
-            df.loc[index, 'E2'] = col
+        for i in index_list:
+            df.loc[i, 'E2'] = col
 
     left_frame = df[df['E2'] == ' ']
     print(len(left_frame))
