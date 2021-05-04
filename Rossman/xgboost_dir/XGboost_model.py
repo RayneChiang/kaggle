@@ -43,7 +43,7 @@ def build_features(features, data):
     data['Month'] = data.Date.dt.month
     data['Day'] = data.Date.dt.day
     data['DayOfWeek'] = data.Date.dt.dayofweek
-    data['WeekOfYear'] = data.Date.dt.weekofyear
+    data['WeekOfYear'] = data.Date.dt.isocalendar().week
 
     # CompetionOpen en PromoOpen from https://www.kaggle.com/ananya77041/rossmann-store-sales/randomforestpython/code
     # Calculate time competition open time in months
