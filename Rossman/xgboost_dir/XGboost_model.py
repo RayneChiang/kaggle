@@ -109,27 +109,6 @@ def build_features(features, data):
     return data, features
 
 
-def get_store_sales_statistics(df, df2):
-    mean = df.groupby('Store')['Sales'].mean()
-    std = df.groupby('Store')['Sales'].std()
-    mean_dataframe = pd.DataFrame(mean).reset_index()
-    std_dataframe = pd.DataFrame(std).reset_index()
-    df2 = pd.merge(df2,mean_dataframe, on='Store', how='left').rename(columns={"Sales": "SalesMean"})
-    df2 = pd.merge(df2,std_dataframe, on='Store', how='left').rename(columns={"Sales": "SalesStd"})
-    return df2
-
-
-def get_sales_level_groups(df2):
-    Q1 = df2.SalesMean.quantile(0.25)
-    Q2 = df2.SalesMean.quantile(0.50)
-    Q3 = df2.SalesMean.quantile(0.75)
-    df2['StoreGroup1'] = (df2.SalesMean < Q1).astype(int)
-    df2['StoreGroup2'] = ((df2.SalesMean>=Q1) & (df2.SalesMean<Q2)).astype(int)
-    df2['StoreGroup3'] = ((df2.SalesMean>=Q2) & (df2.SalesMean<Q3)).astype(int)
-    df2['StoreGroup4'] = (df2.SalesMean>=Q3).astype(int)
-    df2['StoreGroup']= df2['StoreGroup1'] + 2*df2['StoreGroup2'] + 3*df2['StoreGroup3'] + 4*df2['StoreGroup4']
-    df2.drop(['StoreGroup1', 'StoreGroup2', 'StoreGroup3', 'StoreGroup4'],axis=1, inplace=True)
-    return df2
 
 
 if __name__ == '__main__':
@@ -151,8 +130,6 @@ if __name__ == '__main__':
     train_data = train_data.reset_index()
     train_data.drop(find_outlier_index("Sales", train_data), inplace=True, axis=0)
 
-    store_data = get_store_sales_statistics(train_data, store_data)
-    store_data = get_sales_level_groups(store_data)
     # Join store_data
     train_data = pd.merge(train_data, store_data, on='Store')
     test_data = pd.merge(test_data, store_data, on='Store')
