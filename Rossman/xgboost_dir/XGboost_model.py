@@ -137,9 +137,9 @@ def create_new_store_feature(data):
     data = get_store_sales_statistics(train_data, data)
     data = get_sales_level_groups(data)
 
-    store_data_sales = data.groupby([df['Store']])['Sales'].sum()
-    store_data_customers = data.groupby([df['Store']])['Customers'].sum()
-    store_data_open = data.groupby([df['Store']])['Open'].count()
+    store_data_sales = data.groupby([data['Store']])['Sales'].sum()
+    store_data_customers = data.groupby([data['Store']])['Customers'].sum()
+    store_data_open = data.groupby([data['Store']])['Open'].count()
 
     store_data_sales_per_day = store_data_sales / store_data_open
     store_data_customers_per_day = store_data_customers / store_data_open
