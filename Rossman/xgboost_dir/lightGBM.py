@@ -7,7 +7,7 @@ import pandas as pd
 import numpy as np
 import operator
 import matplotlib as plt
-from XGboost_model import rmspe, rmspe_xg, build_features, create_feature_map
+from XGboost_model import rmspe, rmspe_xg, build_features, create_feature_map, find_outlier_index
 
 if __name__ == '__main__':
     path_dir = os.path.abspath(os.path.join(os.path.dirname("__file__"), os.path.pardir))
@@ -15,14 +15,24 @@ if __name__ == '__main__':
     train_data = pd.read_csv(path_dir + "/input/train.csv", parse_dates=[2])
     store_data = pd.read_csv(path_dir + "/input/store.csv")
 
+    # Drop duplicates
+    train_data = train_data.drop_duplicates()
+    store_data = store_data.drop_duplicates()
+    # drop sales == 0 observations
+    train_data = train_data[train_data.Sales != 0]
+    # competition = store_data[store_data['CompetitionDistance'].isna()]
     df_open = test_data[test_data['Open'].isna()]
     test_data.fillna(1, inplace=True)  # assume all store open in test data
     store_data.fillna(0, inplace=True)
+
+    train_data = train_data.reset_index()
+    train_data.drop(find_outlier_index("Sales", train_data), inplace=True, axis=0)
 
     # Join store_data
     train_data = pd.merge(train_data, store_data, on='Store')
     test_data = pd.merge(test_data, store_data, on='Store')
 
+    # argument feature
     features = []
     train_data, features = build_features(features, train_data)
     test_data, _ = build_features([], test_data)
