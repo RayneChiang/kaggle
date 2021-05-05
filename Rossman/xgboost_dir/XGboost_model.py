@@ -133,13 +133,14 @@ def build_features(features, data):
     return data, features
 
 
-def create_new_store_feature(data):
+def create_new_store_feature(data, train):
+    # create store group feature
     data = get_store_sales_statistics(train_data, data)
     data = get_sales_level_groups(data)
-
-    store_data_sales = data.groupby([data['Store']])['Sales'].sum()
-    store_data_customers = data.groupby([data['Store']])['Customers'].sum()
-    store_data_open = data.groupby([data['Store']])['Open'].count()
+    # create some new feature on store related to sales
+    store_data_sales = train.groupby([data['Store']])['Sales'].sum()
+    store_data_customers = train.groupby([data['Store']])['Customers'].sum()
+    store_data_open = train.groupby([data['Store']])['Open'].count()
 
     store_data_sales_per_day = store_data_sales / store_data_open
     store_data_customers_per_day = store_data_customers / store_data_open
@@ -170,11 +171,12 @@ if __name__ == '__main__':
     test_data.fillna(1, inplace=True)  # assume all store open in test data
     store_data.fillna(0, inplace=True)
 
-    # create a new store feature
-    store_data = create_new_store_feature(store_data)
 
     train_data = train_data.reset_index()
     train_data.drop(find_outlier_index("Sales", train_data), inplace=True, axis=0)
+
+
+    store_data = create_new_store_feature(store_data, train_data)
 
     # Join store_data
     train_data = pd.merge(train_data, store_data, on='Store')
