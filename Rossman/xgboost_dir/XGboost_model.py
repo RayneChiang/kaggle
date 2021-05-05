@@ -5,6 +5,7 @@ import xgboost as xgb
 import operator
 import matplotlib
 import os
+from sklearn.model_selection import GridSearchCV
 
 matplotlib.use('Agg')
 
@@ -28,6 +29,42 @@ def rmspe_xg(yhat, y):
     return "rmspe", rmspe(y, yhat)
 
 
+def find_low_high(feature):
+    # find store specific Q1 - 3*IQ and Q3 + 3*IQ
+    IQ = df.groupby('Store')[feature].quantile(0.75)-df.groupby('Store')[feature].quantile(0.25)
+    Q1 = df.groupby('Store')[feature].quantile(0.25)
+    Q3 = df.groupby('Store')[feature].quantile(0.75)
+    low = Q1 - 3*IQ
+    high = Q3 + 3*IQ
+    low = low.to_frame()
+    low = low.reset_index()
+    low = low.rename(columns={feature: "low"})
+    high = high.to_frame()
+    high = high.reset_index()
+    high = high.rename(columns={feature: "high"})
+    return {'low':low, 'high':high}
+
+
+def find_outlier_index(feature):
+    main_data = df[['Store', feature]]
+    low = find_low_high(feature)["low"]
+    high = find_low_high(feature)["high"]
+
+    new_low = pd.merge(main_data, low, on='Store', how='left')
+    new_low['outlier_low'] = (new_low[feature] < new_low['low'])
+    index_low = new_low[new_low['outlier_low'] == True].index
+    index_low = list(index_low)
+
+    new_high = pd.merge(main_data, high, on='Store', how='left')
+    new_high['outlier_high'] = new_high[feature] > new_high['high']
+    index_high = new_high[new_high['outlier_high'] == True].index
+    index_high = list(index_high)
+
+    index_low.extend(index_high)
+    index = list(set(index_low))
+    return index
+
+
 def build_features(features, data):
     data.loc[data.Open.isnull(), 'Open'] = 1
     features.extend(['Store', 'CompetitionDistance', 'Promo', 'Promo2', 'SchoolHoliday'])
@@ -43,7 +80,7 @@ def build_features(features, data):
     data['Month'] = data.Date.dt.month
     data['Day'] = data.Date.dt.day
     data['DayOfWeek'] = data.Date.dt.dayofweek
-    data['WeekOfYear'] = data.Date.dt.isocalendar().week
+    data['WeekOfYear'] = data.Date.dt.week
 
     # CompetionOpen en PromoOpen from https://www.kaggle.com/ananya77041/rossmann-store-sales/randomforestpython/code
     # Calculate time competition open time in months
@@ -78,19 +115,18 @@ if __name__ == '__main__':
     train_data = pd.read_csv(path_dir + "/input/train.csv", parse_dates=[2])
     store_data = pd.read_csv(path_dir + "/input/store.csv")
 
-
-    # clean na data
-    print(train_data.isna().sum())
-    print(test_data.isna().sum())
-    print(store_data.isna().sum())
-
+    # Drop duplicates
+    train_data= train_data.drop_duplicates()
+    store_data = store_data.drop_duplicates()
+    # drop sales == 0 observations
+    train_data = train_data[train_data.Sales != 0]
     # competition = store_data[store_data['CompetitionDistance'].isna()]
-    print(train_data.Open.value_counts())
-    print(test_data.Open.value_counts())
     df_open = test_data[test_data['Open'].isna()]
     test_data.fillna(1, inplace=True)  # assume all store open in test data
     store_data.fillna(0, inplace=True)
-    print(store_data.dtypes)
+
+    train_data = train_data.reset_index()
+    train_data.drop(find_outlier_index("Sales"), inplace=True, axis=0)
 
     # Join store_data
     train_data = pd.merge(train_data, store_data, on='Store')
@@ -100,7 +136,6 @@ if __name__ == '__main__':
     features = []
     train_data, features = build_features(features, train_data)
     test_data, _ = build_features([], test_data)
-
 
     # train XBGoost model
     params = {"objective": "reg:linear",
@@ -125,17 +160,39 @@ if __name__ == '__main__':
     dvalid = xgb.DMatrix(X_valid[features], y_valid)
 
     watchlist = [(dtrain, 'train'), (dvalid, 'eval')]
-    gbm = xgb.train(params, dtrain, num_boost_round, evals=watchlist,\
-                    early_stopping_rounds=100, feval=rmspe_xg, verbose_eval=True)
+    params_grid = {'max_depth': (3, 5, 10),
+                   'colsample_bytree': (0.5, 0.7, 0.8),
+                   'learning_rate': (0.1, 0.3),
+                   'subsample': (0.7, 0.9),
 
+                   # 'early_stopping_rounds': [100],
+                   # "objective": ["reg:linear"],
+                   # "booster": ["gbtree"],
+                   # "eta": [0.3],
+                   # 'evals' : [watchlist],
+                   #  'feval' :[rmspe_xg],
+                   # 'verbose_eval': [True]
+                   }
+
+    gbm = xgb.XGBRegressor(base_score=0.5, booster='gbtree', colsample_bylevel=1,
+       colsample_bynode=1, colsample_bytree=1, gamma=0,
+       importance_type='gain', learning_rate=0.1, max_delta_step=0,
+       max_depth=3, min_child_weight=1, missing=None, n_estimators=100,
+       n_jobs=1, nthread=None, objective='reg:linear', random_state=0,
+       reg_alpha=0, reg_lambda=1, scale_pos_weight=1, seed=None,
+       silent=None, subsample=1, verbosity=1)
+    xgb_grid = GridSearchCV(gbm, params_grid, n_jobs=5)
+    xgb_grid.fit(X_train[features], y_train)
+
+    print(xgb_grid.cv_results_)
     print("Validating")
-    yhat = gbm.predict(xgb.DMatrix(X_valid[features]))
+    yhat = xgb_grid.predict(X_valid[features])
     error = rmspe(X_valid.Sales.values, np.expm1(yhat))
     print('RMSPE: {:.6f}'.format(error))
 
     # use the trained model to predict
-    dtest = xgb.DMatrix(test_data[features])
-    test_probs = gbm.predict(dtest)
+    dtest = test_data[features]
+    test_probs = xgb_grid.predict(dtest)
     result = pd.DataFrame({"Id": test_data["Id"], 'Sales': np.expm1(test_probs)})
 
     result[result < 0] = 0
@@ -160,3 +217,6 @@ if __name__ == '__main__':
     fig_featp = featp.get_figure()
     fig_featp.savefig('feature_importance_xgb.png', bbox_inches='tight', pad_inches=1)
 
+    xgb.plot_tree(xgb_grid.best_estimator_)
+    plt.rcParams['figure.figsize'] = [20, 10]
+    plt.savefig('decision tree')
