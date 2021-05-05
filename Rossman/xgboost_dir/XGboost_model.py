@@ -31,18 +31,18 @@ def rmspe_xg(yhat, y):
 
 def find_low_high(feature, data):
     # find store specific Q1 - 3*IQ and Q3 + 3*IQ
-    IQ = data.groupby('Store')[feature].quantile(0.75)-data.groupby('Store')[feature].quantile(0.25)
+    IQ = data.groupby('Store')[feature].quantile(0.75) - data.groupby('Store')[feature].quantile(0.25)
     Q1 = data.groupby('Store')[feature].quantile(0.25)
     Q3 = data.groupby('Store')[feature].quantile(0.75)
-    low = Q1 - 3*IQ
-    high = Q3 + 3*IQ
+    low = Q1 - 3 * IQ
+    high = Q3 + 3 * IQ
     low = low.to_frame()
     low = low.reset_index()
     low = low.rename(columns={feature: "low"})
     high = high.to_frame()
     high = high.reset_index()
     high = high.rename(columns={feature: "high"})
-    return {'low':low, 'high':high}
+    return {'low': low, 'high': high}
 
 
 def find_outlier_index(feature, data):
@@ -65,10 +65,34 @@ def find_outlier_index(feature, data):
     return index
 
 
+def get_store_sales_statistics(df, df2):
+    mean = df.groupby('Store')['Sales'].mean()
+    std = df.groupby('Store')['Sales'].std()
+    mean_dataframe = pd.DataFrame(mean).reset_index()
+    std_dataframe = pd.DataFrame(std).reset_index()
+    df2 = pd.merge(df2, mean_dataframe, on='Store', how='left').rename(columns={"Sales": "SalesMean"})
+    df2 = pd.merge(df2, std_dataframe, on='Store', how='left').rename(columns={"Sales": "SalesStd"})
+    return df2
+
+
+def get_sales_level_groups(df2):
+    Q1 = df2.SalesMean.quantile(0.25)
+    Q2 = df2.SalesMean.quantile(0.50)
+    Q3 = df2.SalesMean.quantile(0.75)
+    df2['StoreGroup1'] = (df2.SalesMean < Q1).astype(int)
+    df2['StoreGroup2'] = ((df2.SalesMean >= Q1) & (df2.SalesMean < Q2)).astype(int)
+    df2['StoreGroup3'] = ((df2.SalesMean >= Q2) & (df2.SalesMean < Q3)).astype(int)
+    df2['StoreGroup4'] = (df2.SalesMean >= Q3).astype(int)
+    df2['StoreGroup'] = df2['StoreGroup1'] + 2 * df2['StoreGroup2'] + 3 * df2['StoreGroup3'] + 4 * df2['StoreGroup4']
+    df2.drop(['StoreGroup1', 'StoreGroup2', 'StoreGroup3', 'StoreGroup4'], axis=1, inplace=True)
+    return df2
+
+
 def build_features(features, data):
     data.loc[data.Open.isnull(), 'Open'] = 1
     features.extend(['Store', 'CompetitionDistance', 'Promo', 'Promo2', 'SchoolHoliday'])
     features.extend(['StoreType', 'Assortment', 'StateHoliday'])
+    features.extend(['SalesPerDay', 'CustomersPerDay', 'SalesPerCustomersPerDay', 'StoreGroup'])
 
     mappings = {'0': 0, 'a': 1, 'b': 2, 'c': 3, 'd': 4}
     data.StoreType.replace(mappings, inplace=True)
@@ -109,6 +133,25 @@ def build_features(features, data):
     return data, features
 
 
+def create_new_store_feature(data):
+    data = get_store_sales_statistics(train_data, data)
+    data = get_sales_level_groups(data)
+
+    store_data_sales = data.groupby([df['Store']])['Sales'].sum()
+    store_data_customers = data.groupby([df['Store']])['Customers'].sum()
+    store_data_open = data.groupby([df['Store']])['Open'].count()
+
+    store_data_sales_per_day = store_data_sales / store_data_open
+    store_data_customers_per_day = store_data_customers / store_data_open
+    store_data_sales_per_customer_per_day = store_data_sales_per_day / store_data_customers_per_day
+
+    data = pd.merge(data, store_data_sales_per_day.reset_index(name='SalesPerDay'), how='left', on=['Store'])
+    data = pd.merge(data, store_data_customers_per_day.reset_index(name='CustomersPerDay'), how='left',
+                    on=['Store'])
+    data = pd.merge(data, store_data_sales_per_customer_per_day.reset_index(name='SalesPerCustomersPerDay'),
+                    how='left', on=['Store'])
+
+    return data
 
 
 if __name__ == '__main__':
@@ -118,7 +161,7 @@ if __name__ == '__main__':
     store_data = pd.read_csv(path_dir + "/input/store.csv")
 
     # Drop duplicates
-    train_data= train_data.drop_duplicates()
+    train_data = train_data.drop_duplicates()
     store_data = store_data.drop_duplicates()
     # drop sales == 0 observations
     train_data = train_data[train_data.Sales != 0]
@@ -126,6 +169,9 @@ if __name__ == '__main__':
     df_open = test_data[test_data['Open'].isna()]
     test_data.fillna(1, inplace=True)  # assume all store open in test data
     store_data.fillna(0, inplace=True)
+
+    # create a new store feature
+    store_data = create_new_store_feature(store_data)
 
     train_data = train_data.reset_index()
     train_data.drop(find_outlier_index("Sales", train_data), inplace=True, axis=0)
