@@ -29,11 +29,11 @@ def rmspe_xg(yhat, y):
     return "rmspe", rmspe(y, yhat)
 
 
-def find_low_high(feature):
+def find_low_high(feature, data):
     # find store specific Q1 - 3*IQ and Q3 + 3*IQ
-    IQ = df.groupby('Store')[feature].quantile(0.75)-df.groupby('Store')[feature].quantile(0.25)
-    Q1 = df.groupby('Store')[feature].quantile(0.25)
-    Q3 = df.groupby('Store')[feature].quantile(0.75)
+    IQ = data.groupby('Store')[feature].quantile(0.75)-data.groupby('Store')[feature].quantile(0.25)
+    Q1 = data.groupby('Store')[feature].quantile(0.25)
+    Q3 = data.groupby('Store')[feature].quantile(0.75)
     low = Q1 - 3*IQ
     high = Q3 + 3*IQ
     low = low.to_frame()
@@ -45,10 +45,10 @@ def find_low_high(feature):
     return {'low':low, 'high':high}
 
 
-def find_outlier_index(feature):
-    main_data = df[['Store', feature]]
-    low = find_low_high(feature)["low"]
-    high = find_low_high(feature)["high"]
+def find_outlier_index(feature, data):
+    main_data = data[['Store', feature]]
+    low = find_low_high(feature, data)["low"]
+    high = find_low_high(feature, data)["high"]
 
     new_low = pd.merge(main_data, low, on='Store', how='left')
     new_low['outlier_low'] = (new_low[feature] < new_low['low'])
@@ -109,6 +109,29 @@ def build_features(features, data):
     return data, features
 
 
+def get_store_sales_statistics(df, df2):
+    mean = df.groupby('Store')['Sales'].mean()
+    std = df.groupby('Store')['Sales'].std()
+    mean_dataframe = pd.DataFrame(mean).reset_index()
+    std_dataframe = pd.DataFrame(std).reset_index()
+    df2 = pd.merge(df2,mean_dataframe, on='Store', how='left').rename(columns={"Sales": "SalesMean"})
+    df2 = pd.merge(df2,std_dataframe, on='Store', how='left').rename(columns={"Sales": "SalesStd"})
+    return df2
+
+
+def get_sales_level_groups(df2):
+    Q1 = df2.SalesMean.quantile(0.25)
+    Q2 = df2.SalesMean.quantile(0.50)
+    Q3 = df2.SalesMean.quantile(0.75)
+    df2['StoreGroup1'] = (df2.SalesMean < Q1).astype(int)
+    df2['StoreGroup2'] = ((df2.SalesMean>=Q1) & (df2.SalesMean<Q2)).astype(int)
+    df2['StoreGroup3'] = ((df2.SalesMean>=Q2) & (df2.SalesMean<Q3)).astype(int)
+    df2['StoreGroup4'] = (df2.SalesMean>=Q3).astype(int)
+    df2['StoreGroup']= df2['StoreGroup1'] + 2*df2['StoreGroup2'] + 3*df2['StoreGroup3'] + 4*df2['StoreGroup4']
+    df2.drop(['StoreGroup1', 'StoreGroup2', 'StoreGroup3', 'StoreGroup4'],axis=1, inplace=True)
+    return df2
+
+
 if __name__ == '__main__':
     path_dir = os.path.abspath(os.path.join(os.path.dirname("__file__"), os.path.pardir))
     test_data = pd.read_csv(path_dir + "/input/test.csv", parse_dates=[3])
@@ -126,8 +149,10 @@ if __name__ == '__main__':
     store_data.fillna(0, inplace=True)
 
     train_data = train_data.reset_index()
-    train_data.drop(find_outlier_index("Sales"), inplace=True, axis=0)
+    train_data.drop(find_outlier_index("Sales", train_data), inplace=True, axis=0)
 
+    store_data = get_store_sales_statistics(train_data, store_data)
+    store_data = get_sales_level_groups(store_data)
     # Join store_data
     train_data = pd.merge(train_data, store_data, on='Store')
     test_data = pd.merge(test_data, store_data, on='Store')
@@ -137,6 +162,7 @@ if __name__ == '__main__':
     train_data, features = build_features(features, train_data)
     test_data, _ = build_features([], test_data)
 
+    # train XBGoost model
     # train XBGoost model
     params = {"objective": "reg:linear",
               "booster": "gbtree",
@@ -160,39 +186,17 @@ if __name__ == '__main__':
     dvalid = xgb.DMatrix(X_valid[features], y_valid)
 
     watchlist = [(dtrain, 'train'), (dvalid, 'eval')]
-    params_grid = {'max_depth': (3, 5, 10),
-                   'colsample_bytree': (0.5, 0.7, 0.8),
-                   'learning_rate': (0.1, 0.3),
-                   'subsample': (0.7, 0.9),
+    gbm = xgb.train(params, dtrain, num_boost_round, evals=watchlist, \
+                    early_stopping_rounds=100, feval=rmspe_xg, verbose_eval=True)
 
-                   # 'early_stopping_rounds': [100],
-                   # "objective": ["reg:linear"],
-                   # "booster": ["gbtree"],
-                   # "eta": [0.3],
-                   # 'evals' : [watchlist],
-                   #  'feval' :[rmspe_xg],
-                   # 'verbose_eval': [True]
-                   }
-
-    gbm = xgb.XGBRegressor(base_score=0.5, booster='gbtree', colsample_bylevel=1,
-       colsample_bynode=1, colsample_bytree=1, gamma=0,
-       importance_type='gain', learning_rate=0.1, max_delta_step=0,
-       max_depth=3, min_child_weight=1, missing=None, n_estimators=100,
-       n_jobs=1, nthread=None, objective='reg:linear', random_state=0,
-       reg_alpha=0, reg_lambda=1, scale_pos_weight=1, seed=None,
-       silent=None, subsample=1, verbosity=1)
-    xgb_grid = GridSearchCV(gbm, params_grid, n_jobs=5)
-    xgb_grid.fit(X_train[features], y_train)
-
-    print(xgb_grid.cv_results_)
     print("Validating")
-    yhat = xgb_grid.predict(X_valid[features])
+    yhat = gbm.predict(xgb.DMatrix(X_valid[features]))
     error = rmspe(X_valid.Sales.values, np.expm1(yhat))
     print('RMSPE: {:.6f}'.format(error))
 
     # use the trained model to predict
-    dtest = test_data[features]
-    test_probs = xgb_grid.predict(dtest)
+    dtest = xgb.DMatrix(test_data[features])
+    test_probs = gbm.predict(dtest)
     result = pd.DataFrame({"Id": test_data["Id"], 'Sales': np.expm1(test_probs)})
 
     result[result < 0] = 0
@@ -200,9 +204,6 @@ if __name__ == '__main__':
 
     # save final submission
     result.to_csv("xgboost_submission.csv", index=False)
-
-    # XGB feature importances Based on https://www.kaggle.com/mmueller/liberty-mutual-group-property-inspection
-    # -prediction/xgb-feature-importance-python/code
 
     create_feature_map(features)
     importance = gbm.get_fscore(fmap='xgb.fmap')
@@ -216,7 +217,3 @@ if __name__ == '__main__':
     plt.xlabel('relative importance')
     fig_featp = featp.get_figure()
     fig_featp.savefig('feature_importance_xgb.png', bbox_inches='tight', pad_inches=1)
-
-    xgb.plot_tree(xgb_grid.best_estimator_)
-    plt.rcParams['figure.figsize'] = [20, 10]
-    plt.savefig('decision tree')
